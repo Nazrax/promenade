@@ -1,0 +1,229 @@
+package net.shadowspire.promenade  // USE YOUR ACTUAL PACKAGE NAME
+
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import net.shadowspire.promenade.ui.theme.PromenadeTheme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            PromenadeTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    PlayerScreen(modifier = Modifier.padding(innerPadding))
+                }
+            }
+        }
+    }
+}
+
+// Helper: format milliseconds as M:SS
+fun formatTime(ms: Int): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
+}
+
+@Composable
+fun PlayerScreen(modifier: Modifier = Modifier) {
+    // ---- State variables ----
+    // "by" delegates the property so you read/write the value directly
+    // instead of calling .value every time. It's syntactic sugar.
+    var fileName by remember { mutableStateOf("No file selected") }
+    var isPlaying by remember { mutableStateOf(false) }
+    var duration by remember { mutableFloatStateOf(0f) }
+    var position by remember { mutableFloatStateOf(0f) }
+    var isSeeking by remember { mutableStateOf(false) }
+
+    // MediaPlayer instance, remembered across recompositions
+    // "remember" means: create this once, keep it alive as long as this
+    // composable is in the UI tree
+    val mediaPlayer = remember { MediaPlayer() }
+
+    val context = LocalContext.current
+
+    // Handler for periodic UI updates (runs on main thread)
+    val handler = remember { Handler(Looper.getMainLooper()) }
+
+    // This Runnable updates the seek position every 200ms while playing.
+    // We use an object expression (Kotlin's version of anonymous inner class)
+    // because the Runnable needs to re-post itself.
+    val updatePosition = remember {
+        object : Runnable {
+            override fun run() {
+                if (mediaPlayer.isPlaying) {
+                    position = mediaPlayer.currentPosition.toFloat()
+                    handler.postDelayed(this, 200L)
+                }
+            }
+        }
+    }
+
+    // ---- File picker ----
+    // This creates a launcher for the system file picker.
+    // The lambda runs when the user picks a file (or cancels).
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        // uri is null if the user cancelled
+        if (uri != null) {
+            // Take persistable read permission so we can access the file
+            // across app restarts if needed
+            context.contentResolver.takePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+
+            // Extract a display name from the URI
+            fileName = uri.lastPathSegment ?: "Unknown"
+
+            // Reset and prepare the MediaPlayer with the new file
+            mediaPlayer.reset()
+            mediaPlayer.setDataSource(context, uri)
+            mediaPlayer.prepare()  // synchronous prepare — fine for local files
+
+            duration = mediaPlayer.duration.toFloat()
+            position = 0f
+            isPlaying = false
+        }
+    }
+
+    // ---- Permission request launcher ----
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted: Boolean ->
+        if (granted) {
+            filePickerLauncher.launch(arrayOf("audio/*"))
+        }
+    }
+
+    // ---- Cleanup when this composable leaves the tree ----
+    DisposableEffect(Unit) {
+        onDispose {
+            handler.removeCallbacks(updatePosition)
+            mediaPlayer.release()
+        }
+    }
+
+    // ---- UI Layout ----
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Track name
+        Text(
+            text = fileName,
+            fontSize = 18.sp
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Open file button
+        Button(onClick = {
+            // Check/request the appropriate permission, then launch picker
+            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                android.Manifest.permission.READ_MEDIA_AUDIO
+            } else {
+                android.Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+
+            if (ContextCompat.checkSelfPermission(context, permission)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                filePickerLauncher.launch(arrayOf("audio/*"))
+            } else {
+                permissionLauncher.launch(permission)
+            }
+        }) {
+            Text("Open MP3")
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Seek bar
+        // The time display row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(formatTime(position.toInt()))
+            Text(formatTime(duration.toInt()))
+        }
+
+        Slider(
+            value = if (duration > 0f) position / duration else 0f,
+            onValueChange = { fraction ->
+                // User is dragging — update displayed position but don't
+                // seek yet (avoids choppy audio from constant seeking)
+                isSeeking = true
+                position = fraction * duration
+            },
+            onValueChangeFinished = {
+                // User released the thumb — now actually seek
+                mediaPlayer.seekTo(position.toInt())
+                isSeeking = false
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Play / Pause button
+        Button(
+            onClick = {
+                if (duration > 0f) {  // only if a file is loaded
+                    if (mediaPlayer.isPlaying) {
+                        mediaPlayer.pause()
+                        isPlaying = false
+                        handler.removeCallbacks(updatePosition)
+                    } else {
+                        mediaPlayer.start()
+                        isPlaying = true
+                        handler.post(updatePosition)
+                    }
+                }
+            }
+        ) {
+            Text(if (isPlaying) "Pause" else "Play")
+        }
+    }
+}
