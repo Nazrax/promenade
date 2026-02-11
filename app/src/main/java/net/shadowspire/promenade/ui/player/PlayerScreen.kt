@@ -31,6 +31,7 @@ import net.shadowspire.promenade.PlayerViewModel
 import net.shadowspire.promenade.TrackData
 import android.net.Uri
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.net.toUri
 
 
 @Composable
@@ -82,7 +83,7 @@ private fun TrackListSection(
                 // Opens the system settings page for all-files access
                 val intent = android.content.Intent(
                     android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:${context.packageName}")
+                    "package:${context.packageName}".toUri()
                 )
                 context.startActivity(intent)
             }) {
