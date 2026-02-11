@@ -22,7 +22,8 @@ data class TrackData(
     val musicUri: Uri,
     val callsUri: Uri,
     val intro: String,
-    val repetitions: List<Repetition>
+    val repetitions: List<Repetition>,
+    val jsonFileName: String
 ) {
     val repetitionCount: Int get() = repetitions.size
 }
@@ -35,6 +36,8 @@ fun loadTracksFromFolder(folderPath: String): List<TrackData> {
 
     for (file in folder.listFiles().orEmpty()) {
         if (file.isFile && file.name.endsWith(".json", ignoreCase = true)) {
+            // Skip playlist files
+            if (file.name.startsWith("playlist_", ignoreCase = true)) continue
             try {
                 val track = parseTrackJson(file)
                 tracks.add(track)
@@ -67,6 +70,7 @@ private fun parseTrackJson(jsonFile: File): TrackData {
         musicUri = Uri.fromFile(musicFile),
         callsUri = Uri.fromFile(callsFile),
         intro = trackJson.intro,
-        repetitions = trackJson.repetitions
+        repetitions = trackJson.repetitions,
+        jsonFileName = jsonFile.name
     )
 }
