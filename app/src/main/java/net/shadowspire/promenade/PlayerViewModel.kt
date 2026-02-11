@@ -12,14 +12,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 
+import java.io.File
+
 class PlayerViewModel : ViewModel() {
 
-    // ---- Public observable state ----
-    // The UI reads these. "mutableStateOf" makes Compose recompose
-    // whenever they change. The ViewModel owns them; the UI just looks.
-    var fileName by mutableStateOf("No file selected")
-        private set  // only this class can write; outside code can read
+    // ---- Track list state ----
+    var tracks by mutableStateOf<List<TrackData>>(emptyList())
+        private set
 
+    var currentTrack by mutableStateOf<TrackData?>(null)
+        private set
+
+    // ---- Playback state ----
     var isPlaying by mutableStateOf(false)
         private set
 
@@ -30,71 +34,130 @@ class PlayerViewModel : ViewModel() {
         private set
 
     var isSeeking by mutableStateOf(false)
-        // public set — the UI needs to set this when dragging starts/stops
+
+    /** Balance: 0.0 = all music, 1.0 = all calls, 0.5 = equal */
+    var balance by mutableFloatStateOf(0.5f)
 
     // ---- Private internals ----
-    private val mediaPlayer = MediaPlayer()
+    private var musicPlayer: MediaPlayer? = null
+    private var callsPlayer: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val updatePosition = object : Runnable {
         override fun run() {
-            if (mediaPlayer.isPlaying && !isSeeking) {
-                position = mediaPlayer.currentPosition.toFloat()
+            val mp = musicPlayer ?: return
+            if (mp.isPlaying && !isSeeking) {
+                position = mp.currentPosition.toFloat()
             }
-            if (mediaPlayer.isPlaying) {
+            if (mp.isPlaying) {
                 handler.postDelayed(this, 200L)
             }
         }
     }
 
-    // ---- Public actions (called by the UI) ----
-
-    fun loadFile(context: Context, uri: Uri) {
-        // Persist permission so the URI survives app restarts
-        context.contentResolver.takePersistableUriPermission(
-            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-        )
-
-        fileName = uri.lastPathSegment ?: "Unknown"
-
-        mediaPlayer.reset()
-        mediaPlayer.setDataSource(context, uri)
-        mediaPlayer.prepare()
-
-        duration = mediaPlayer.duration.toFloat()
-        position = 0f
-        isPlaying = false
+    // ---- Folder loading ----
+    fun loadFolder(folderPath: String) {
+        tracks = loadTracksFromFolder(folderPath)
     }
 
-    fun togglePlayPause() {
-        if (duration <= 0f) return  // no file loaded
+    // ---- Track loading ----
+    fun loadTrack(context: Context, track: TrackData) {
+        stop()
 
-        if (mediaPlayer.isPlaying) {
-            mediaPlayer.pause()
+        musicPlayer = MediaPlayer().apply {
+            setDataSource(context, track.musicUri)
+            prepare()
+        }
+        callsPlayer = MediaPlayer().apply {
+            setDataSource(context, track.callsUri)
+            prepare()
+        }
+
+        currentTrack = track
+        duration = musicPlayer!!.duration.toFloat()
+        position = 0f
+        isPlaying = false
+
+        applyBalance()
+
+        // When music ends, stop everything
+        musicPlayer!!.setOnCompletionListener {
+            stop()
+        }
+    }
+
+    // ---- Playback controls ----
+    fun togglePlayPause() {
+        val mp = musicPlayer ?: return
+        val cp = callsPlayer ?: return
+
+        if (mp.isPlaying) {
+            mp.pause()
+            cp.pause()
             isPlaying = false
             handler.removeCallbacks(updatePosition)
         } else {
-            mediaPlayer.start()
+            mp.start()
+            cp.start()
             isPlaying = true
             handler.post(updatePosition)
         }
     }
 
-    fun onSeekStart(fraction: Float) {
+    fun stop() {
+        handler.removeCallbacks(updatePosition)
+        musicPlayer?.run {
+            if (isPlaying) stop()
+            release()
+        }
+        callsPlayer?.run {
+            if (isPlaying) stop()
+            release()
+        }
+        musicPlayer = null
+        callsPlayer = null
+        isPlaying = false
+        position = 0f
+        duration = 0f
+    }
+
+    fun onSeekMove(fraction: Float) {
         isSeeking = true
         position = fraction * duration
     }
 
     fun onSeekEnd() {
-        mediaPlayer.seekTo(position.toInt())
+        musicPlayer?.seekTo(position.toInt())
+        callsPlayer?.seekTo(position.toInt())
         isSeeking = false
     }
 
+    // ---- Balance ----
+    /**
+     * Applies volume to both players based on the balance value.
+     *
+     * At balance = 0.5 (center), both play at 0.707 volume each.
+     * This is an equal-power crossfade: the perceived total loudness
+     * stays constant across the full range of the slider, and the two
+     * tracks at center won't clip even if each MP3 is normalized to
+     * full scale.
+     *
+     * At balance = 0.0, music is 1.0 and calls is 0.0.
+     * At balance = 1.0, music is 0.0 and calls is 1.0.
+     */
+    fun applyBalance() {
+        val mp = musicPlayer ?: return
+        val cp = callsPlayer ?: return
+
+        val musicVolume = Math.cos(balance * Math.PI / 2.0).toFloat()
+        val callsVolume = Math.sin(balance * Math.PI / 2.0).toFloat()
+
+        mp.setVolume(musicVolume, musicVolume)
+        cp.setVolume(callsVolume, callsVolume)
+    }
+
     // ---- Cleanup ----
-    // ViewModel.onCleared() is called when the Activity is permanently
-    // destroyed (not on rotation — ViewModels survive rotation)
     override fun onCleared() {
-        handler.removeCallbacks(updatePosition)
-        mediaPlayer.release()
+        stop()
     }
 }

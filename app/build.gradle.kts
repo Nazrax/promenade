@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "net.shadowspire.promenade"
-        minSdk = 26
+        minSdk = 30
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -56,4 +56,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
+    implementation("com.google.code.gson:gson:2.13.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }
