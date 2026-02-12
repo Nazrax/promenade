@@ -150,7 +150,7 @@ fun PlaylistEditorScreen(
                     onValueChange = { folderText = it },
                     label = { Text("Folder path") },
                     singleLine = true,
-                    placeholder = { Text("/storage/emulated/0/Music") }
+                    placeholder = { Text(DEFAULT_FOLDER_PATH) }
                 )
             },
             confirmButton = {

@@ -87,7 +87,7 @@ class PlayerViewModel : ViewModel() {
 
     fun restoreFolder(context: Context) {
         val saved = context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
-            .getString("folder_path", "") ?: ""
+            .getString("folder_path", DEFAULT_FOLDER_PATH) ?: DEFAULT_FOLDER_PATH
         folderPath = saved
         if (saved.isNotEmpty()) {
             loadFolder(saved)
