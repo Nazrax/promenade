@@ -28,11 +28,17 @@ data class TrackData(
     val repetitionCount: Int get() = repetitions.size
 }
 
-fun loadTracksFromFolder(folderPath: String): List<TrackData> {
+data class TrackLoadResult(
+    val tracks: List<TrackData>,
+    val warnings: List<String>
+)
+
+fun loadTracksFromFolder(folderPath: String): TrackLoadResult {
     val folder = File(folderPath)
-    if (!folder.isDirectory) return emptyList()
+    if (!folder.isDirectory) return TrackLoadResult(emptyList(), listOf("Folder not found: $folderPath"))
 
     val tracks = mutableListOf<TrackData>()
+    val warnings = mutableListOf<String>()
 
     for (file in folder.listFiles().orEmpty()) {
         if (file.isFile && file.name.endsWith(".json", ignoreCase = true)) {
@@ -43,16 +49,26 @@ fun loadTracksFromFolder(folderPath: String): List<TrackData> {
                 tracks.add(track)
             } catch (e: Exception) {
                 android.util.Log.w("TrackData", "Skipping ${file.name}: ${e.message}")
+                warnings.add("${file.name}: ${e.message}")
             }
         }
     }
 
-    return tracks.sortedBy { it.name.lowercase() }
+    return TrackLoadResult(
+        tracks = tracks.sortedBy { it.name.lowercase() },
+        warnings = warnings
+    )
 }
 
 private fun parseTrackJson(jsonFile: File): TrackData {
     val jsonText = jsonFile.readText()
-    val trackJson = Gson().fromJson(jsonText, TrackJson::class.java)
+    val trackJson = try {
+        Gson().fromJson(jsonText, TrackJson::class.java)
+            ?: throw IllegalArgumentException("Invalid JSON format")
+    } catch (e: com.google.gson.JsonSyntaxException) {
+        throw IllegalArgumentException("Corrupt or invalid JSON: ${e.message}")
+    }
+
     val folder = jsonFile.parentFile!!
 
     val musicFile = File(folder, trackJson.musicFile)

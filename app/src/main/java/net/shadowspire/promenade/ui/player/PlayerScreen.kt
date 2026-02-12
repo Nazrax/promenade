@@ -1,7 +1,6 @@
 package net.shadowspire.promenade
 
 import android.os.Environment
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +29,19 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show warning messages as snackbars
+    val warning = viewModel.warningMessage
+    LaunchedEffect(warning) {
+        if (warning != null) {
+            snackbarHostState.showSnackbar(
+                message = warning,
+                duration = SnackbarDuration.Long
+            )
+            viewModel.dismissWarning()
+        }
+    }
 
     // Permission handling
     var hasPermission by remember {
@@ -55,6 +67,7 @@ fun PlayerScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Promenade") },

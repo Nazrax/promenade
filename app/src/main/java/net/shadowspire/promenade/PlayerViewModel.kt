@@ -56,10 +56,17 @@ class PlayerViewModel : ViewModel() {
     var folderPath by mutableStateOf("")
         private set
 
+    // Warning message for UI to display
+    var warningMessage by mutableStateOf<String?>(null)
+
     private var musicPlayer: MediaPlayer? = null
     private var callsPlayer: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var progressRunnable: Runnable? = null
+
+    fun dismissWarning() {
+        warningMessage = null
+    }
 
     fun setFolder(path: String, context: Context) {
         folderPath = path
@@ -98,8 +105,13 @@ class PlayerViewModel : ViewModel() {
     }
 
     fun loadFolder(path: String) {
-        availableTracks = loadTracksFromFolder(path)
+        val (tracks, trackWarnings) = loadTracksFromFolder(path)
+        availableTracks = tracks
         playlists = loadPlaylistsFromFolder(path)
+
+        if (trackWarnings.isNotEmpty()) {
+            warningMessage = trackWarnings.joinToString("\n")
+        }
     }
 
     fun reloadPlaylists() {
@@ -138,8 +150,22 @@ class PlayerViewModel : ViewModel() {
 
     private fun resolvePlaylist(playlist: PlaylistData) {
         activePlaylist = playlist
-        resolvedPlaylistTracks = playlist.entries.mapNotNull { fileName ->
-            availableTracks.find { it.jsonFileName == fileName }
+        val resolved = mutableListOf<TrackData>()
+        val warnings = mutableListOf<String>()
+
+        for (fileName in playlist.entries) {
+            val track = availableTracks.find { it.jsonFileName == fileName }
+            if (track != null) {
+                resolved.add(track)
+            } else {
+                warnings.add("Playlist \"${playlist.name}\": track \"$fileName\" not found")
+            }
+        }
+
+        resolvedPlaylistTracks = resolved
+
+        if (warnings.isNotEmpty()) {
+            warningMessage = warnings.joinToString("\n")
         }
     }
 
@@ -164,25 +190,40 @@ class PlayerViewModel : ViewModel() {
                 prepare()
                 setOnCompletionListener { onTrackCompleted(context) }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("PlayerViewModel", "Error loading music: ${e.message}")
+            warningMessage = "Could not load music file for \"${track.name}\": ${e.message}"
+            currentTrack = null
+            return
+        }
 
+        try {
             callsPlayer = MediaPlayer().apply {
                 setDataSource(context, track.callsUri)
                 prepare()
             }
-
-            totalDurationMs = musicPlayer?.duration ?: 0
-            currentTimeMs = 0
-            progress = 0f
-
-            applyBalance()
         } catch (e: Exception) {
-            android.util.Log.e("PlayerViewModel", "Error loading track: ${e.message}")
+            android.util.Log.e("PlayerViewModel", "Error loading calls: ${e.message}")
+            warningMessage = "Could not load calls file for \"${track.name}\": ${e.message}"
+            // Release the music player since we can't play properly
+            musicPlayer?.release()
+            musicPlayer = null
+            currentTrack = null
+            return
         }
+
+        totalDurationMs = musicPlayer?.duration ?: 0
+        currentTimeMs = 0
+        progress = 0f
+
+        applyBalance()
     }
 
     fun loadTrack(context: Context, track: TrackData) {
         loadTrackWithoutPlaying(context, track)
-        startPlayback()
+        if (currentTrack != null) {
+            startPlayback()
+        }
     }
 
     private fun onTrackCompleted(context: Context) {
