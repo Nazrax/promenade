@@ -67,17 +67,7 @@ fun PlayerScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Promenade") },
-                actions = {
-                    IconButton(onClick = onNavigateToPlaylistEditor) {
-                        Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Edit Playlists")
-                    }
-                }
-            )
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = modifier
@@ -88,7 +78,10 @@ fun PlayerScreen(
                 PermissionSection()
             } else {
                 // Playlist selector
-                PlaylistSelectorRow(viewModel = viewModel)
+                PlaylistSelectorRow(
+                    viewModel = viewModel,
+                    onNavigateToPlaylistEditor = onNavigateToPlaylistEditor
+                )
 
                 // Playlist view (top portion)
                 PlaylistSection(
@@ -125,7 +118,10 @@ private fun PermissionSection() {
 }
 
 @Composable
-private fun PlaylistSelectorRow(viewModel: PlayerViewModel) {
+private fun PlaylistSelectorRow(
+    viewModel: PlayerViewModel,
+    onNavigateToPlaylistEditor: () -> Unit
+) {
     val context = LocalContext.current
     var showPlaylistPicker by remember { mutableStateOf(false) }
 
@@ -159,6 +155,15 @@ private fun PlaylistSelectorRow(viewModel: PlayerViewModel) {
             title = { Text("Select Playlist") },
             text = {
                 LazyColumn {
+                    item {
+                        TextButton(onClick = {
+                            onNavigateToPlaylistEditor()
+                            showPlaylistPicker = false
+                        }) {
+                            Text("Edit Playlists")
+                        }
+                        HorizontalDivider()
+                    }
                     itemsIndexed(viewModel.playlists) { _, playlist ->
                         ListItem(
                             headlineContent = {
