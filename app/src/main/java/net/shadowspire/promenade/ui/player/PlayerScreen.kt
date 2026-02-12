@@ -113,6 +113,7 @@ private fun PermissionSection() {
 
 @Composable
 private fun PlaylistSelectorRow(viewModel: PlayerViewModel) {
+    val context = LocalContext.current
     var showPlaylistPicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -158,7 +159,7 @@ private fun PlaylistSelectorRow(viewModel: PlayerViewModel) {
                                 Text("${playlist.entries.size} tracks")
                             },
                             modifier = Modifier.clickable {
-                                viewModel.selectPlaylist(playlist)
+                                viewModel.selectPlaylist(playlist, context)
                                 showPlaylistPicker = false
                             }
                         )
@@ -167,7 +168,7 @@ private fun PlaylistSelectorRow(viewModel: PlayerViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.selectPlaylist(null)
+                    viewModel.selectPlaylist(null, context)
                     showPlaylistPicker = false
                 }) {
                     Text("Clear")
@@ -219,46 +220,58 @@ private fun PlaylistSection(
         ) {
             itemsIndexed(tracks) { index, track ->
                 val isCurrent = index == viewModel.playlistPosition
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            text = track.name,
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    supportingContent = {
-                        Text(
-                            "${track.intro} · ${track.repetitionCount} reps",
-                            fontSize = 12.sp
-                        )
-                    },
-                    leadingContent = {
-                        Text(
-                            "${index + 1}",
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isCurrent) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    trailingContent = {
-                        if (isCurrent && viewModel.isPlaying) {
-                            Icon(
-                                Icons.Default.GraphicEq,
-                                contentDescription = "Now playing",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
+
+                val containerColor = if (isCurrent)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surface
+
+                Surface(
+                    color = containerColor,
                     modifier = Modifier
+                        .fillMaxWidth()
                         .clickable { viewModel.playFromPlaylistPosition(context, index) }
-                        .then(
-                            if (isCurrent) Modifier.background(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            ) else Modifier
-                        )
-                )
+                ) {
+                    ListItem(
+                        colors = ListItemDefaults.colors(containerColor = containerColor),
+                        headlineContent = {
+                            Text(
+                                text = track.name,
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                "${track.intro} · ${track.repetitionCount} reps",
+                                fontSize = 12.sp,
+                                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        leadingContent = {
+                            Text(
+                                "${index + 1}",
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingContent = {
+                            if (isCurrent && viewModel.isPlaying) {
+                                Icon(
+                                    Icons.Default.GraphicEq,
+                                    contentDescription = "Now playing",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    )
+                }
+
                 if (index < tracks.lastIndex) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
@@ -271,6 +284,7 @@ private fun PlaylistSection(
 private fun PlayerControlsSection(viewModel: PlayerViewModel) {
     val context = LocalContext.current
     val track = viewModel.currentTrack
+    var showMuteSettings by remember { mutableStateOf(false) }
 
     Surface(
         tonalElevation = 3.dp,
@@ -305,7 +319,6 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Time display
                 Text(
                     text = formatTime(viewModel.currentTimeMs),
                     fontSize = 12.sp,
@@ -324,15 +337,13 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                     modifier = Modifier.width(45.dp)
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
-
                 // Transport controls
-                IconButton(
-                    onClick = { viewModel.skipToPreviousTrack(context) },
-                    enabled = viewModel.activePlaylist != null && viewModel.playlistPosition > 0
-                ) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
-                }
+//                IconButton(
+//                    onClick = { viewModel.skipToPreviousTrack(context) },
+//                    enabled = viewModel.activePlaylist != null && viewModel.playlistPosition > 0
+//                ) {
+//                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+//                }
 
                 IconButton(
                     onClick = { viewModel.togglePlayPause() },
@@ -345,16 +356,92 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                     )
                 }
 
-                IconButton(
-                    onClick = { viewModel.skipToNextTrack(context) },
-                    enabled = viewModel.activePlaylist != null &&
-                            viewModel.playlistPosition < viewModel.resolvedPlaylistTracks.size - 1
+//                IconButton(
+//                    onClick = { viewModel.skipToNextTrack(context) },
+//                    enabled = viewModel.activePlaylist != null &&
+//                            viewModel.playlistPosition < viewModel.resolvedPlaylistTracks.size - 1
+//                ) {
+//                    Icon(Icons.Default.SkipNext, contentDescription = "Next")
+//                }
+            }
+
+            // Balance slider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Music",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Slider(
+                    value = viewModel.balance,
+                    onValueChange = {
+                        viewModel.balance = it
+                        viewModel.applyBalance()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+
+                Text(
+                    "Calls",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.width(4.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { viewModel.toggleCallsMuted() }
                 ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next")
+                    Icon(
+                        if (viewModel.callsMuted) Icons.Default.VolumeOff else Icons.Default.RecordVoiceOver,
+                        contentDescription = "Calls",
+                        tint = if (viewModel.callsMuted) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = if (viewModel.callsMuted) "Calls muted" else "Calls on",
+                        fontSize = 13.sp
+                    )
+                }
+
+                Spacer(Modifier.width(4.dp))
+
+                IconButton(
+                    onClick = { showMuteSettings = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "Mute settings",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
     }
+
+    if (showMuteSettings) {
+        AutoMuteDialog(
+            muteAfterReps = viewModel.muteAfterReps,
+            muteWithRepsRemaining = viewModel.muteWithRepsRemaining,
+            onDismiss = { showMuteSettings = false },
+            onSave = { after, remaining ->
+                viewModel.muteAfterReps = after
+                viewModel.muteWithRepsRemaining = remaining
+                showMuteSettings = false
+            }
+        )
+    }
+
 }
 
 @Composable
@@ -382,58 +469,6 @@ private fun RepetitionDisplay(viewModel: PlayerViewModel, track: TrackData) {
 
 @Composable
 private fun CallsMuteControls(viewModel: PlayerViewModel) {
-    var showMuteSettings by remember { mutableStateOf(false) }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Mute toggle
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { viewModel.toggleCallsMuted() }
-        ) {
-            Icon(
-                if (viewModel.callsMuted) Icons.Default.VolumeOff else Icons.Default.RecordVoiceOver,
-                contentDescription = "Calls",
-                tint = if (viewModel.callsMuted) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = if (viewModel.callsMuted) "Calls muted" else "Calls on",
-                fontSize = 13.sp
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // Settings button for auto-mute
-        IconButton(
-            onClick = { showMuteSettings = true },
-            modifier = Modifier.size(28.dp)
-        ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Mute settings",
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-
-    if (showMuteSettings) {
-        AutoMuteDialog(
-            muteAfterReps = viewModel.muteAfterReps,
-            muteWithRepsRemaining = viewModel.muteWithRepsRemaining,
-            onDismiss = { showMuteSettings = false },
-            onSave = { after, remaining ->
-                viewModel.muteAfterReps = after
-                viewModel.muteWithRepsRemaining = remaining
-                showMuteSettings = false
-            }
-        )
-    }
 }
 
 @Composable

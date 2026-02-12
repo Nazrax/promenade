@@ -49,6 +49,9 @@ class PlayerViewModel : ViewModel() {
     var muteAfterReps by mutableStateOf<Int?>(null)
     var muteWithRepsRemaining by mutableStateOf<Int?>(null)
 
+    // Balance: 0.0 = all music, 1.0 = all calls, 0.5 = equal
+    var balance by mutableFloatStateOf(0.5f)
+
     // Folder path
     var folderPath by mutableStateOf("")
         private set
@@ -63,6 +66,16 @@ class PlayerViewModel : ViewModel() {
         context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
             .edit().putString("folder_path", path).apply()
         loadFolder(path)
+
+        // Auto-load last playlist
+        val lastPlaylistFileName = context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
+            .getString("last_playlist", null)
+        if (lastPlaylistFileName != null) {
+            val playlist = playlists.find { it.fileName == lastPlaylistFileName }
+            if (playlist != null) {
+                selectPlaylist(playlist, context)
+            }
+        }
     }
 
     fun restoreFolder(context: Context) {
@@ -71,6 +84,16 @@ class PlayerViewModel : ViewModel() {
         folderPath = saved
         if (saved.isNotEmpty()) {
             loadFolder(saved)
+
+            // Auto-load last playlist
+            val lastPlaylistFileName = context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
+                .getString("last_playlist", null)
+            if (lastPlaylistFileName != null) {
+                val playlist = playlists.find { it.fileName == lastPlaylistFileName }
+                if (playlist != null) {
+                    selectPlaylist(playlist, context)
+                }
+            }
         }
     }
 
@@ -81,11 +104,10 @@ class PlayerViewModel : ViewModel() {
 
     fun reloadPlaylists() {
         playlists = loadPlaylistsFromFolder(folderPath)
-        // Refresh active playlist if it still exists
         activePlaylist?.let { active ->
             val updated = playlists.find { it.fileName == active.fileName }
             if (updated != null) {
-                selectPlaylist(updated)
+                resolvePlaylist(updated)
             } else {
                 activePlaylist = null
                 resolvedPlaylistTracks = emptyList()
@@ -94,33 +116,46 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
-    fun selectPlaylist(playlist: PlaylistData?) {
-        activePlaylist = playlist
+    fun selectPlaylist(playlist: PlaylistData?, context: Context) {
         if (playlist != null) {
-            resolvedPlaylistTracks = playlist.entries.mapNotNull { fileName ->
-                availableTracks.find { it.jsonFileName == fileName }
+            resolvePlaylist(playlist)
+            context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
+                .edit().putString("last_playlist", playlist.fileName).apply()
+
+            // Auto-load first track without starting playback
+            if (resolvedPlaylistTracks.isNotEmpty()) {
+                playlistPosition = 0
+                loadTrackWithoutPlaying(context, resolvedPlaylistTracks[0])
             }
-            playlistPosition = -1
         } else {
+            activePlaylist = null
             resolvedPlaylistTracks = emptyList()
             playlistPosition = -1
+            context.getSharedPreferences("promenade", Context.MODE_PRIVATE)
+                .edit().remove("last_playlist").apply()
+        }
+    }
+
+    private fun resolvePlaylist(playlist: PlaylistData) {
+        activePlaylist = playlist
+        resolvedPlaylistTracks = playlist.entries.mapNotNull { fileName ->
+            availableTracks.find { it.jsonFileName == fileName }
         }
     }
 
     fun playFromPlaylistPosition(context: Context, position: Int) {
         if (position < 0 || position >= resolvedPlaylistTracks.size) return
         playlistPosition = position
-        loadTrack(context, resolvedPlaylistTracks[position])
+        loadTrackWithoutPlaying(context, resolvedPlaylistTracks[position])
     }
 
-    fun loadTrack(context: Context, track: TrackData) {
+    private fun loadTrackWithoutPlaying(context: Context, track: TrackData) {
         stopPlayback()
 
         currentTrack = track
         currentRepetition = 0
         callsMuted = false
 
-        // Check auto-mute settings
         checkAutoMute()
 
         try {
@@ -139,21 +174,26 @@ class PlayerViewModel : ViewModel() {
             currentTimeMs = 0
             progress = 0f
 
-            startPlayback()
+            applyBalance()
         } catch (e: Exception) {
             android.util.Log.e("PlayerViewModel", "Error loading track: ${e.message}")
         }
+    }
+
+    fun loadTrack(context: Context, track: TrackData) {
+        loadTrackWithoutPlaying(context, track)
+        startPlayback()
     }
 
     private fun onTrackCompleted(context: Context) {
         isPlaying = false
         stopProgressUpdates()
 
-        // Auto-advance playlist
         if (activePlaylist != null && playlistPosition >= 0) {
             val nextPos = playlistPosition + 1
             if (nextPos < resolvedPlaylistTracks.size) {
-                playFromPlaylistPosition(context, nextPos)
+                playlistPosition = nextPos
+                loadTrackWithoutPlaying(context, resolvedPlaylistTracks[nextPos])
             }
         }
     }
@@ -170,6 +210,7 @@ class PlayerViewModel : ViewModel() {
         musicPlayer?.start()
         callsPlayer?.let {
             it.start()
+            applyBalance()
             if (callsMuted) {
                 it.setVolume(0f, 0f)
             }
@@ -197,17 +238,11 @@ class PlayerViewModel : ViewModel() {
         stopProgressUpdates()
 
         musicPlayer?.apply {
-            try {
-                stop()
-            } catch (_: Exception) {
-            }
+            try { stop() } catch (_: Exception) {}
             release()
         }
         callsPlayer?.apply {
-            try {
-                stop()
-            } catch (_: Exception) {
-            }
+            try { stop() } catch (_: Exception) {}
             release()
         }
         musicPlayer = null
@@ -238,10 +273,26 @@ class PlayerViewModel : ViewModel() {
     }
 
     private fun applyCallsVolume() {
-        callsPlayer?.setVolume(
-            if (callsMuted) 0f else 1f,
-            if (callsMuted) 0f else 1f
-        )
+        if (callsMuted) {
+            callsPlayer?.setVolume(0f, 0f)
+        } else {
+            applyBalance()
+        }
+    }
+
+    fun applyBalance() {
+        val mp = musicPlayer ?: return
+        val cp = callsPlayer ?: return
+
+        val musicVolume = Math.cos(balance * Math.PI / 2.0).toFloat()
+        val callsVolume = Math.sin(balance * Math.PI / 2.0).toFloat()
+
+        mp.setVolume(musicVolume, musicVolume)
+        if (callsMuted) {
+            cp.setVolume(0f, 0f)
+        } else {
+            cp.setVolume(callsVolume, callsVolume)
+        }
     }
 
     private fun checkAutoMute() {

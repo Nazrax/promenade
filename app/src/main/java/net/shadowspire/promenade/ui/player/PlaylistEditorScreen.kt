@@ -116,16 +116,14 @@ fun PlaylistEditorScreen(
             }
 
             if (selectedPlaylist == null) {
-                // Playlist list view
                 PlaylistListView(
                     playlists = viewModel.playlists,
-		    folderPath = viewModel.folderPath,
+                    folderPath = viewModel.folderPath,
                     onSelect = { selectedPlaylist = it },
                     onDelete = { showDeleteConfirm = it },
                     modifier = Modifier.weight(1f)
                 )
             } else {
-                // Playlist detail/edit view
                 PlaylistDetailView(
                     playlist = selectedPlaylist!!,
                     availableTracks = viewModel.availableTracks,
@@ -140,25 +138,7 @@ fun PlaylistEditorScreen(
         }
     }
 
-    // Create dialog
-    if (showCreateDialog) {
-        CreatePlaylistDialog(
-            onDismiss = { showCreateDialog = false },
-            onCreate = { name ->
-                val fileName = generatePlaylistFileName(name)
-                val newPlaylist = PlaylistData(
-                    name = name,
-                    fileName = fileName,
-                    entries = emptyList()
-                )
-                savePlaylist(viewModel.folderPath, newPlaylist)
-                viewModel.reloadPlaylists()
-                selectedPlaylist = newPlaylist
-                showCreateDialog = false
-            }
-        )
-    }
-
+    // Folder dialog
     if (showFolderDialog) {
         var folderText by remember { mutableStateOf(viewModel.folderPath) }
         AlertDialog(
@@ -184,6 +164,25 @@ fun PlaylistEditorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showFolderDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Create dialog
+    if (showCreateDialog) {
+        CreatePlaylistDialog(
+            onDismiss = { showCreateDialog = false },
+            onCreate = { name ->
+                val fileName = generatePlaylistFileName(name)
+                val newPlaylist = PlaylistData(
+                    name = name,
+                    fileName = fileName,
+                    entries = emptyList()
+                )
+                savePlaylist(viewModel.folderPath, newPlaylist)
+                viewModel.reloadPlaylists()
+                selectedPlaylist = newPlaylist
+                showCreateDialog = false
             }
         )
     }
@@ -225,7 +224,10 @@ private fun PlaylistListView(
             modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            ) {
                 if (folderPath.isEmpty()) {
                     Text("No folder selected.", fontWeight = FontWeight.Light)
                     Spacer(Modifier.height(4.dp))
@@ -281,7 +283,6 @@ private fun PlaylistDetailView(
     }
     var showAddTrackDialog by remember { mutableStateOf(false) }
 
-    // Resolve entries to track names for display
     val resolvedEntries = remember(entries, availableTracks) {
         entries.map { fileName ->
             availableTracks.find { it.jsonFileName == fileName }
@@ -295,7 +296,6 @@ private fun PlaylistDetailView(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Add track button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,17 +316,16 @@ private fun PlaylistDetailView(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Empty playlist. Tap Add Track to get started.", textAlign = TextAlign.Center)
+                Text("Empty playlist. Tap Add Track to get started.")
             }
         } else {
-            // Reorderable list
             val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
             val reorderableLazyListState =
                 rememberReorderableLazyListState(lazyListState) { from, to ->
                     entries = entries.toMutableList().apply {
                         add(to.index, removeAt(from.index))
                     }
-		    val updated = playlist.copy(entries = entries)
+                    val updated = playlist.copy(entries = entries)
                     savePlaylist(viewModel.folderPath, updated)
                     onPlaylistUpdated(updated)
                 }
@@ -394,23 +393,9 @@ private fun PlaylistDetailView(
                     }
                 }
             }
-
-            // Save button (after reordering)
-	    /*
-            Button(
-                onClick = { saveCurrentState() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Icon(Icons.Default.Save, contentDescription = null)
-                Spacer(Modifier.width(4.dp))
-                Text("Save Order")
-            }*/
         }
     }
 
-    // Add track dialog
     if (showAddTrackDialog) {
         AlertDialog(
             onDismissRequest = { showAddTrackDialog = false },
