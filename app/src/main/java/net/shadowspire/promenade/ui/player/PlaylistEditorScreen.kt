@@ -1,5 +1,6 @@
 package net.shadowspire.promenade
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistEditorScreen(
@@ -32,6 +34,10 @@ fun PlaylistEditorScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<PlaylistData?>(null) }
     var showFolderDialog by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectedPlaylist != null) {
+        selectedPlaylist = null
+    }
 
     Scaffold(
         topBar = {
