@@ -1,4 +1,4 @@
-package net.shadowspire.promenade
+package net.shadowspire.promenade.ui.player
 
 import android.os.Environment
 import androidx.compose.foundation.clickable
@@ -21,11 +21,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 
+import net.shadowspire.promenade.DEFAULT_FOLDER_PATH
+import net.shadowspire.promenade.PlayerViewModel
+import net.shadowspire.promenade.TrackData
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
     onNavigateToPlaylistEditor: () -> Unit,
+    onNavigateToInstructions: (trackName: String, path: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -90,8 +95,10 @@ fun PlayerScreen(
                 )
 
                 // Player controls (bottom)
-                PlayerControlsSection(viewModel = viewModel)
-            }
+                PlayerControlsSection(
+                    viewModel = viewModel,
+                    onNavigateToInstructions = onNavigateToInstructions
+                )            }
         }
     }
 }
@@ -299,7 +306,10 @@ private fun PlaylistSection(
 }
 
 @Composable
-private fun PlayerControlsSection(viewModel: PlayerViewModel) {
+private fun PlayerControlsSection(
+    viewModel: PlayerViewModel,
+    onNavigateToInstructions: (trackName: String, path: String) -> Unit
+) {
     val context = LocalContext.current
     val track = viewModel.currentTrack
     var showMuteSettings by remember { mutableStateOf(false) }
@@ -309,14 +319,36 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Track name
-            Text(
-                text = track?.name ?: "No track loaded",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // Track name with optional instructions icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = track?.name ?: "No track loaded",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (track?.instructionsPath != null) {
+                    IconButton(
+                        onClick = {
+                            onNavigateToInstructions(track.name, track.instructionsPath)
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Description,
+                            contentDescription = "View instructions",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -355,14 +387,6 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                     modifier = Modifier.width(45.dp)
                 )
 
-                // Transport controls
-//                IconButton(
-//                    onClick = { viewModel.skipToPreviousTrack(context) },
-//                    enabled = viewModel.activePlaylist != null && viewModel.playlistPosition > 0
-//                ) {
-//                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
-//                }
-
                 IconButton(
                     onClick = { viewModel.togglePlayPause() },
                     enabled = track != null
@@ -373,14 +397,6 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                         modifier = Modifier.size(32.dp)
                     )
                 }
-
-//                IconButton(
-//                    onClick = { viewModel.skipToNextTrack(context) },
-//                    enabled = viewModel.activePlaylist != null &&
-//                            viewModel.playlistPosition < viewModel.resolvedPlaylistTracks.size - 1
-//                ) {
-//                    Icon(Icons.Default.SkipNext, contentDescription = "Next")
-//                }
             }
 
             // Balance slider
@@ -391,7 +407,8 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                 Text(
                     "Music",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 Slider(
@@ -408,30 +425,26 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
                 Text(
                     "Calls",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    color = if (viewModel.callsMuted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { viewModel.toggleCallsMuted() }
                 )
 
                 Spacer(Modifier.width(4.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { viewModel.toggleCallsMuted() }
+                IconButton(
+                    onClick = { viewModel.toggleCallsMuted() },
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         if (viewModel.callsMuted) Icons.Default.VolumeOff else Icons.Default.RecordVoiceOver,
-                        contentDescription = "Calls",
-                        tint = if (viewModel.callsMuted) MaterialTheme.colorScheme.error
+                        contentDescription = if (viewModel.callsMuted) "Unmute calls" else "Mute calls",
+                        tint = if (viewModel.callsMuted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = if (viewModel.callsMuted) "Calls muted" else "Calls on",
-                        fontSize = 13.sp
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-
-                Spacer(Modifier.width(4.dp))
 
                 IconButton(
                     onClick = { showMuteSettings = true },
@@ -459,7 +472,6 @@ private fun PlayerControlsSection(viewModel: PlayerViewModel) {
             }
         )
     }
-
 }
 
 @Composable
