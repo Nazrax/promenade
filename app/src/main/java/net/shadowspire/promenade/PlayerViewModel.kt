@@ -197,19 +197,20 @@ class PlayerViewModel : ViewModel() {
             return
         }
 
-        try {
-            callsPlayer = MediaPlayer().apply {
-                setDataSource(context, track.callsUri)
-                prepare()
+        if (track.callsUri != null) {
+            try {
+                callsPlayer = MediaPlayer().apply {
+                    setDataSource(context, track.callsUri)
+                    prepare()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PlayerViewModel", "Error loading calls: ${e.message}")
+                warningMessage = "Could not load calls file for \"${track.name}\": ${e.message}"
+                // Continue without calls - just won't have a calls player
+                callsPlayer = null
             }
-        } catch (e: Exception) {
-            android.util.Log.e("PlayerViewModel", "Error loading calls: ${e.message}")
-            warningMessage = "Could not load calls file for \"${track.name}\": ${e.message}"
-            // Release the music player since we can't play properly
-            musicPlayer?.release()
-            musicPlayer = null
-            currentTrack = null
-            return
+        } else {
+            callsPlayer = null
         }
 
         totalDurationMs = musicPlayer?.duration ?: 0
@@ -323,16 +324,18 @@ class PlayerViewModel : ViewModel() {
 
     fun applyBalance() {
         val mp = musicPlayer ?: return
-        val cp = callsPlayer ?: return
 
         val musicVolume = Math.cos(balance * Math.PI / 2.0).toFloat()
         val callsVolume = Math.sin(balance * Math.PI / 2.0).toFloat()
 
         mp.setVolume(musicVolume, musicVolume)
-        if (callsMuted) {
-            cp.setVolume(0f, 0f)
-        } else {
-            cp.setVolume(callsVolume, callsVolume)
+        val cp = callsPlayer
+        if (cp != null) {
+            if (callsMuted) {
+                cp.setVolume(0f, 0f)
+            } else {
+                cp.setVolume(callsVolume, callsVolume)
+            }
         }
     }
 

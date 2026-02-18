@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -313,6 +314,7 @@ private fun PlayerControlsSection(
     val context = LocalContext.current
     val track = viewModel.currentTrack
     var showMuteSettings by remember { mutableStateOf(false) }
+    val hasCalls = track?.hasCalls == true
 
     Surface(
         tonalElevation = 3.dp,
@@ -422,25 +424,40 @@ private fun PlayerControlsSection(
                         .padding(horizontal = 8.dp)
                 )
 
+                val callsTextColor = if (!hasCalls)
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                else if (viewModel.callsMuted)
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                else
+                    MaterialTheme.colorScheme.primary
+
+                val callsTextDecoration = if (!hasCalls) TextDecoration.LineThrough else null
+
                 Text(
                     "Calls",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (viewModel.callsMuted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { viewModel.toggleCallsMuted() }
+                    color = callsTextColor,
+                    textDecoration = callsTextDecoration,
+                    modifier = if (hasCalls) Modifier.clickable { viewModel.toggleCallsMuted() }
+                    else Modifier
                 )
 
                 Spacer(Modifier.width(4.dp))
 
                 IconButton(
                     onClick = { viewModel.toggleCallsMuted() },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    enabled = hasCalls
                 ) {
                     Icon(
-                        if (viewModel.callsMuted) Icons.Default.VolumeOff else Icons.Default.RecordVoiceOver,
+                        if (viewModel.callsMuted || !hasCalls) Icons.Default.VolumeOff
+                        else Icons.Default.RecordVoiceOver,
                         contentDescription = if (viewModel.callsMuted) "Unmute calls" else "Mute calls",
-                        tint = if (viewModel.callsMuted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        tint = if (!hasCalls)
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        else if (viewModel.callsMuted)
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -448,12 +465,16 @@ private fun PlayerControlsSection(
 
                 IconButton(
                     onClick = { showMuteSettings = true },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    enabled = hasCalls
                 ) {
                     Icon(
                         Icons.Default.Schedule,
                         contentDescription = "Mute settings",
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = if (!hasCalls)
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        else LocalContentColor.current
                     )
                 }
             }

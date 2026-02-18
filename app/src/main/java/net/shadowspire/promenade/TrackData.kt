@@ -12,7 +12,7 @@ data class Repetition(
 data class TrackJson(
     val name: String,
     @SerializedName("music_file") val musicFile: String,
-    @SerializedName("calls_file") val callsFile: String,
+    @SerializedName("calls_file") val callsFile: String?,
     @SerializedName("instructions_file") val instructionsFile: String?,
     val intro: String,
     val repetitions: List<Repetition>
@@ -21,13 +21,14 @@ data class TrackJson(
 data class TrackData(
     val name: String,
     val musicUri: Uri,
-    val callsUri: Uri,
+    val callsUri: Uri?,
     val instructionsPath: String?,
     val intro: String,
     val repetitions: List<Repetition>,
     val jsonFileName: String
 ) {
     val repetitionCount: Int get() = repetitions.size
+    val hasCalls: Boolean get() = callsUri != null
 }
 
 data class TrackLoadResult(
@@ -78,9 +79,15 @@ private fun parseTrackJson(jsonFile: File): TrackData {
         throw IllegalArgumentException("Music file '${trackJson.musicFile}' not found")
     }
 
-    val callsFile = File(folder, trackJson.callsFile)
-    if (!callsFile.exists()) {
-        throw IllegalArgumentException("Calls file '${trackJson.callsFile}' not found")
+    val callsUri = if (trackJson.callsFile != null) {
+        val callsFile = File(folder, trackJson.callsFile)
+        if (callsFile.exists()) {
+            Uri.fromFile(callsFile)
+        } else {
+            null
+        }
+    } else {
+        null
     }
 
     val instructionsPath = trackJson.instructionsFile?.let {
@@ -90,7 +97,7 @@ private fun parseTrackJson(jsonFile: File): TrackData {
     return TrackData(
         name = trackJson.name,
         musicUri = Uri.fromFile(musicFile),
-        callsUri = Uri.fromFile(callsFile),
+        callsUri = callsUri,
         instructionsPath = instructionsPath,
         intro = trackJson.intro,
         repetitions = trackJson.repetitions,
