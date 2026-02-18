@@ -451,7 +451,7 @@ private fun PlayerControlsSection(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        Icons.Default.Settings,
+                        Icons.Default.Schedule,
                         contentDescription = "Mute settings",
                         modifier = Modifier.size(18.dp)
                     )
