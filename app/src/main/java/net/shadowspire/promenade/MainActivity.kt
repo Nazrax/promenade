@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -25,6 +26,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PromenadeTheme {
+                // Keep screen on while playing
+                val isPlaying = viewModel.isPlaying
+                LaunchedEffect(isPlaying) {
+                    if (isPlaying) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+
                 PromenadeApp(viewModel = viewModel)
             }
         }
